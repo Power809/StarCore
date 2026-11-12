@@ -1,0 +1,7 @@
+game_files/
+STARCORE-Windows-x64.zip
+__pycache__/
+*.pyc
+build/
+dist/
+*.spec

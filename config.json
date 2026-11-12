@@ -1,0 +1,12 @@
+{
+  "name": "STAR CLIENT",
+  "version": "0.1.0",
+  "minecraft": "all",
+  "platform": "Windows",
+  "loaders": [
+    "Vanilla",
+    "Forge",
+    "Fabric",
+    "NeoForge"
+  ]
+}
