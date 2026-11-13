@@ -5,14 +5,16 @@ from pathlib import Path
 
 try:
     from .classpath_builder import build_classpath
+    from .version_store import load_version_info
+    from .paths import GAME_ROOT
 except ImportError:
     from classpath_builder import build_classpath
+    from version_store import load_version_info
+    from paths import GAME_ROOT
 
-ROOT = Path(__file__).resolve().parents[2]
-VERSION = "1.20.1"
 
 
-def check_java():
+def check_java(required_version):
     try:
         result = subprocess.run(
             ["java", "-version"],
@@ -29,8 +31,8 @@ def check_java():
 
         version = int(match.group(1))
 
-        if version < 17:
-            return False, f"Java {version} is too old"
+        if version < required_version:
+            return False, f"Java {version}, required {required_version}+"
 
         return True, f"Java {version}"
 
@@ -38,7 +40,8 @@ def check_java():
         return False, str(error)
 
 
-def run_checks():
+def run_checks(version_id):
+    info = load_version_info(version_id)
     checks = []
 
     checks.append((
@@ -47,32 +50,57 @@ def run_checks():
         platform.system()
     ))
 
-    java_ok, java_info = check_java()
-    checks.append(("Java 17+", java_ok, java_info))
+    required_java = info.get("javaVersion", {}).get("majorVersion", 17)
+    java_ok, java_info = check_java(required_java)
 
-    client = ROOT / "game_files" / "versions" / VERSION / f"{VERSION}.jar"
-    checks.append(("Minecraft client", client.is_file(), str(client)))
+    checks.append((
+        f"Java {required_java}+",
+        java_ok,
+        java_info
+    ))
 
-    classpath, missing = build_classpath("windows", "x86_64")
+    client = (
+        GAME_ROOT / "versions" /
+        version_id / f"{version_id}.jar"
+    )
+
+    checks.append((
+        "Minecraft client",
+        client.is_file(),
+        str(client)
+    ))
+
+    classpath, missing = build_classpath(
+        version_id,
+        "windows",
+        "x86_64"
+    )
+
     checks.append((
         "Libraries",
-        len(classpath) == 65 and not missing,
+        len(classpath) > 0 and not missing,
         f"{len(classpath)} found, {len(missing)} missing"
     ))
 
-    natives = ROOT / "game_files" / "versions" / VERSION / "natives" / "windows_x64"
+    natives = (
+        GAME_ROOT / "versions" /
+        version_id / "natives" / "windows_x86_64"
+    )
+
     dlls = list(natives.glob("*.dll")) if natives.is_dir() else []
 
     checks.append((
         "Native DLL files",
-        len(dlls) == 7,
+        len(dlls) > 0,
         f"{len(dlls)} found"
     ))
 
-    assets_index = ROOT / "game_files" / "assets" / "indexes" / "5.json"
+    asset_index = info.get("assetIndex", {}).get("id", "")
+    assets_index = GAME_ROOT / "assets" / "indexes" / f"{asset_index}.json"
+
     checks.append((
         "Assets index",
-        assets_index.is_file(),
+        bool(asset_index) and assets_index.is_file(),
         str(assets_index)
     ))
 
@@ -84,4 +112,4 @@ def run_checks():
 
 
 if __name__ == "__main__":
-    run_checks()
+    run_checks("1.20.1")

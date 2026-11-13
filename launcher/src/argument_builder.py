@@ -3,8 +3,11 @@ import platform
 import re
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-VERSION_INFO = ROOT / "version_info.json"
+try:
+    from .version_store import load_version_info
+except ImportError:
+    from version_store import load_version_info
+
 
 
 def os_name(target=None):
@@ -63,10 +66,9 @@ def allowed(rules, target=None, target_arch="x86_64",
     return result
 
 
-def read_arguments(target=None, target_arch="x86_64",
+def read_arguments(version_id, target=None, target_arch="x86_64",
                    features=None, target_os_version=None):
-    with VERSION_INFO.open(encoding="utf-8") as f:
-        data = json.load(f)
+    data = load_version_info(version_id)
 
     result = {"jvm": [], "game": []}
 
@@ -92,7 +94,7 @@ def read_arguments(target=None, target_arch="x86_64",
 
 
 if __name__ == "__main__":
-    args = read_arguments("windows", "x86_64")
+    args = read_arguments("1.20.1", "windows", "x86_64")
 
     print("JVM arguments:", len(args["jvm"]))
     print("Game arguments:", len(args["game"]))

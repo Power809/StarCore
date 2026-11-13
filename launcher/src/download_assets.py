@@ -6,14 +6,32 @@ from pathlib import Path
 from urllib.error import URLError
 from http.client import RemoteDisconnected
 
-ROOT = Path(__file__).resolve().parents[2]
-ASSETS = ROOT / "game_files" / "assets"
+try:
+    from .version_store import load_version_info
+    from .paths import GAME_ROOT
+except ImportError:
+    from version_store import load_version_info
+    from paths import GAME_ROOT
+
+ASSETS = GAME_ROOT / "assets"
+
+
+def file_sha1(path):
+    digest = hashlib.sha1()
+    with path.open("rb") as file:
+        while True:
+            chunk = file.read(1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
+
 
 def download(url, target, expected=None):
     target.parent.mkdir(parents=True, exist_ok=True)
 
-    if target.exists() and expected:
-        if hashlib.sha1(target.read_bytes()).hexdigest() == expected:
+    if target.is_file() and expected:
+        if file_sha1(target) == expected:
             return False
 
     temporary = target.with_suffix(target.suffix + ".part")
@@ -22,7 +40,7 @@ def download(url, target, expected=None):
         try:
             request = urllib.request.Request(
                 url,
-                headers={"User-Agent": "STAR-CLIENT/0.1"}
+                headers={"User-Agent": "STARCORE/0.1"}
             )
 
             digest = hashlib.sha1()
@@ -37,7 +55,6 @@ def download(url, target, expected=None):
                         digest.update(chunk)
 
             if expected and digest.hexdigest() != expected:
-                temporary.unlink(missing_ok=True)
                 raise ValueError("SHA1 verification failed")
 
             temporary.replace(target)
@@ -49,13 +66,17 @@ def download(url, target, expected=None):
                 raise
             time.sleep(3 * (attempt + 1))
 
+        except Exception:
+            temporary.unlink(missing_ok=True)
+            raise
+
     return False
 
-def main():
-    with (ROOT / "version_info.json").open(encoding="utf-8") as file:
-        info = json.load(file)
 
+def main(version_id):
+    info = load_version_info(version_id)
     index = info["assetIndex"]
+
     index_path = ASSETS / "indexes" / (index["id"] + ".json")
 
     download(index["url"], index_path, index.get("sha1"))
@@ -68,11 +89,16 @@ def main():
     downloaded = 0
     skipped = 0
 
-    print("STAR CLIENT - Downloading assets")
+    print("STARCORE - Downloading assets")
+    print("Minecraft:", version_id)
     print("Total assets:", total)
 
     for name, item in objects.items():
         digest = item["hash"]
+
+        if len(digest) != 40 or any(c not in "0123456789abcdef" for c in digest):
+            raise ValueError("Invalid asset hash: " + name)
+
         target = ASSETS / "objects" / digest[:2] / digest
         url = "https://resources.download.minecraft.net/" + digest[:2] + "/" + digest
 
@@ -89,5 +115,6 @@ def main():
     print("Downloaded:", downloaded)
     print("Already verified:", skipped)
 
+
 if __name__ == "__main__":
-    main()
+    main("1.20.1")

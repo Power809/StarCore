@@ -1,37 +1,59 @@
-import json
 import hashlib
 import urllib.request
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+try:
+    from .version_store import load_version_info
+    from .paths import GAME_ROOT
+except ImportError:
+    from version_store import load_version_info
+    from paths import GAME_ROOT
 
-with open(ROOT / "version_info.json", encoding="utf-8") as file:
-    info = json.load(file)
 
-version = info["id"]
-client = info["downloads"]["client"]
+def download_client(version_id):
+    info = load_version_info(version_id)
+    client = info["downloads"]["client"]
 
-folder = ROOT / "game_files" / "versions" / version
-folder.mkdir(parents=True, exist_ok=True)
+    folder = GAME_ROOT / "versions" / version_id
+    folder.mkdir(parents=True, exist_ok=True)
 
-target = folder / f"{version}.jar"
+    target = folder / f"{version_id}.jar"
+    temporary = target.with_suffix(".jar.part")
 
-print("STAR CLIENT")
-print("Downloading Minecraft", version)
+    request = urllib.request.Request(
+        client["url"],
+        headers={"User-Agent": "STARCORE/0.1"}
+    )
 
-request = urllib.request.Request(
-    client["url"],
-    headers={"User-Agent": "STAR-CLIENT/0.1"}
-)
+    digest = hashlib.sha1()
 
-with urllib.request.urlopen(request, timeout=60) as response:
-    content = response.read()
+    print("STARCORE")
+    print("Downloading Minecraft", version_id)
 
-if hashlib.sha1(content).hexdigest() != client["sha1"]:
-    raise ValueError("SHA1 verification failed!")
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            with temporary.open("wb") as file:
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    digest.update(chunk)
+                    file.write(chunk)
 
-target.write_bytes(content)
+        if digest.hexdigest() != client["sha1"]:
+            raise ValueError("SHA1 verification failed!")
 
-print("Download complete!")
-print("SHA1 verified!")
-print("Saved to:", target)
+        temporary.replace(target)
+
+    except Exception:
+        temporary.unlink(missing_ok=True)
+        raise
+
+    print("Download complete!")
+    print("SHA1 verified!")
+    print("Saved to:", target)
+
+    return target
+
+
+if __name__ == "__main__":
+    download_client("1.20.1")
